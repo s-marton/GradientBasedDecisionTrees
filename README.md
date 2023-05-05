@@ -14,3 +14,5 @@ By default, the GPU is used for the calculations of GDT and DNDT. This can be ch
 We further want to note that it is unfortunately not possible to generate reproducible results on a GPU with TensorFlow. However this only results in minor deviations of the performance and does not influence the results shown in the paper.
 
 The Python version used in the experiments was Python 3.11.3.
+
+The code was tested with a Linux distribution. For other distributions it might not work as intended. If there occor errors when running the "*install_requirements.sh*", please consider installing the packages manually. Thereby, it is important to follow the sequence of "*relevant_dependencies.txt*".
