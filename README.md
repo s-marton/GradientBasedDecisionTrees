@@ -1,3 +1,5 @@
+# Gradient Based Decision Trees (GDTs)
+
 This repository provides the code for the paper ***"Learning Decision Trees with Gradient Descent"***. 
 
 The required versions of all packages are listed in "*relevantdependencies.txt*" and can be installed running "*install_requirements.sh*". We further provide the following files to reproduce the results from the paper:
