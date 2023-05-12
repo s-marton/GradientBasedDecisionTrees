@@ -4049,57 +4049,69 @@ def get_params_gentree(tree, config):
 
 
   
+  
 def hpo_gentree(identifier, dataset_dict, parameter_dict, config, metric='f1', greater_better=True):
     
-    def evaluate_parameter_setting_gen(parameter_setting, dataset_dict, config):    
-        if config['gdt']['objective'] == 'classification':
-            cv_generator = StratifiedKFold(n_splits=config['computation']['cv_num'], shuffle=True, random_state=config['computation']['random_seed'])
-        else:
-            cv_generator = KFold(n_splits=config['computation']['cv_num'], shuffle=True, random_state=config['computation']['random_seed'])        
-
-        X_train_valid = pd.concat([dataset_dict['X_train'], dataset_dict['X_valid']])
-        y_train_valid = pd.concat([dataset_dict['y_train'], dataset_dict['y_valid']])
-
-        score_base_model_cv_list = []
-        for train_index, valid_index in cv_generator.split(X_train_valid, y_train_valid):
-            #print("TRAIN:", train_index, "TEST:", test_index)
-            if isinstance(X_train_valid, pd.DataFrame) or isinstance(X_train_valid, pd.Series):
-                X_train_cv, X_valid_cv = X_train_valid.iloc[train_index], X_train_valid.iloc[valid_index]
-            else:
-                X_train_cv, X_valid_cv = X_train_valid[train_index], X_train_valid[valid_index]            
-            if isinstance(y_train_valid, pd.DataFrame) or isinstance(y_train_valid, pd.Series):
-                y_train_cv, y_valid_cv = y_train_valid.iloc[train_index], y_train_valid.iloc[valid_index]
-            else:
-                y_train_cv, y_valid_cv = y_train_valid[train_index], y_train_valid[valid_index]            
+    def evaluate_parameter_setting_gen(parameter_setting, dataset_dict, config):  
+        
+        del dataset_dict
+        score_base_model_trial_list = []
+        for i in range(config['computation']['trials']):
+            dataset_dict = get_preprocessed_dataset(identifier,
+                                                    random_seed=config['computation']['random_seed']+i,
+                                                    config=config,
+                                                    verbosity=0)   
             
-            base_model = GeneticTree()
-            base_model.set_params(**parameter_setting)
-
-            base_model.fit(enforce_numpy(X_train_cv), enforce_numpy(y_train_cv))
-
-            base_model_pred = base_model.predict(enforce_numpy(X_valid_cv))
-
-            if metric not in ['f1', 'roc_auc']:
-                score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(y_valid_cv), np.round(base_model_pred))
+            if config['gdt']['objective'] == 'classification':
+                cv_generator = StratifiedKFold(n_splits=config['computation']['cv_num'], shuffle=True, random_state=config['computation']['random_seed'])
             else:
-                if metric == 'f1':
-                    score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(y_valid_cv), np.round(base_model_pred), average='macro')
-                elif metric == 'roc_auc':
-                    try:
-                        if int(np.max(y_train_cv)+1) > 2:                            
-                            score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(tf.keras.utils.to_categorical(y_valid_cv, num_classes=len(np.unique(np.concatenate([dataset_dict['y_train'].values, dataset_dict['y_valid'].values, dataset_dict['y_test'].values]))))), np.round(tf.keras.utils.to_categorical(base_model_pred, num_classes=len(np.unique(np.concatenate([dataset_dict['y_train'].values, dataset_dict['y_valid'].values, dataset_dict['y_test'].values]))))), multi_class='ovo')
-                        else:
-                            #score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(tf.keras.utils.to_categorical(y_valid_cv)), np.round(tf.keras.utils.to_categorical(base_model_pred)))
-                            score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(y_valid_cv), np.round(base_model_pred))
-                            
-                    except ValueError:
-                        score_base_model_cv = 0.5           
-            score_base_model_cv_list.append(score_base_model_cv)
-            
-        score_base_model = np.mean(score_base_model_cv_list)
+                cv_generator = KFold(n_splits=config['computation']['cv_num'], shuffle=True, random_state=config['computation']['random_seed'])        
 
-        return (score_base_model, parameter_setting)      
-    
+            X_train_valid = pd.concat([dataset_dict['X_train'], dataset_dict['X_valid']])
+            y_train_valid = pd.concat([dataset_dict['y_train'], dataset_dict['y_valid']])
+
+            score_base_model_cv_list = []
+            for train_index, valid_index in cv_generator.split(X_train_valid, y_train_valid):
+                #print("TRAIN:", train_index, "TEST:", test_index)
+                if isinstance(X_train_valid, pd.DataFrame) or isinstance(X_train_valid, pd.Series):
+                    X_train_cv, X_valid_cv = X_train_valid.iloc[train_index], X_train_valid.iloc[valid_index]
+                else:
+                    X_train_cv, X_valid_cv = X_train_valid[train_index], X_train_valid[valid_index]            
+                if isinstance(y_train_valid, pd.DataFrame) or isinstance(y_train_valid, pd.Series):
+                    y_train_cv, y_valid_cv = y_train_valid.iloc[train_index], y_train_valid.iloc[valid_index]
+                else:
+                    y_train_cv, y_valid_cv = y_train_valid[train_index], y_train_valid[valid_index]            
+
+                base_model = GeneticTree()
+                base_model.set_params(**parameter_setting)
+
+                base_model.fit(enforce_numpy(X_train_cv), enforce_numpy(y_train_cv))
+
+                base_model_pred = base_model.predict(enforce_numpy(X_valid_cv))
+
+                if metric not in ['f1', 'roc_auc']:
+                    score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(y_valid_cv), np.round(base_model_pred))
+                else:
+                    if metric == 'f1':
+                        score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(y_valid_cv), np.round(base_model_pred), average='macro')
+                    elif metric == 'roc_auc':
+                        try:
+                            if int(np.max(y_train_cv)+1) > 2:                            
+                                score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(tf.keras.utils.to_categorical(y_valid_cv, num_classes=len(np.unique(np.concatenate([dataset_dict['y_train'].values, dataset_dict['y_valid'].values, dataset_dict['y_test'].values]))))), np.round(tf.keras.utils.to_categorical(base_model_pred, num_classes=len(np.unique(np.concatenate([dataset_dict['y_train'].values, dataset_dict['y_valid'].values, dataset_dict['y_test'].values]))))), multi_class='ovo')
+                            else:
+                                #score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(tf.keras.utils.to_categorical(y_valid_cv)), np.round(tf.keras.utils.to_categorical(base_model_pred)))
+                                score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(y_valid_cv), np.round(base_model_pred))
+
+                        except ValueError:
+                            score_base_model_cv = 0.5           
+                score_base_model_cv_list.append(score_base_model_cv)
+
+            score_base_model = np.mean(score_base_model_cv_list)
+            score_base_model_trial_list.append(score_base_model)
+            
+        score_base_model = np.mean(score_base_model_trial_list)
+
+        return (score_base_model, parameter_setting)        
 
     #parameter_grid = ParameterGrid(parameter_dict)
     parameter_grid = ParameterSampler(n_iter = config['computation']['search_iterations'],
@@ -4145,68 +4157,75 @@ def hpo_gentree(identifier, dataset_dict, parameter_dict, config, metric='f1', g
     file_by_dataset.close()  
     
     return (runtime, base_model)
-    
-    
-    
-    
-
 
     
 def hpo_sklearn(identifier, dataset_dict, parameter_dict, config, metric='f1', greater_better=True):
     
     def evaluate_parameter_setting_sklearn(parameter_setting, dataset_dict, config):   
         
-        if config['gdt']['objective'] == 'classification':
-            cv_generator = StratifiedKFold(n_splits=config['computation']['cv_num'], shuffle=True, random_state=config['computation']['random_seed'])
-        else:
-            cv_generator = KFold(n_splits=config['computation']['cv_num'], shuffle=True, random_state=config['computation']['random_seed'])        
-
-        X_train_valid = pd.concat([dataset_dict['X_train'], dataset_dict['X_valid']])
-        y_train_valid = pd.concat([dataset_dict['y_train'], dataset_dict['y_valid']])
-
-        score_base_model_cv_list = []
-        for train_index, valid_index in cv_generator.split(X_train_valid, y_train_valid):
-            #print("TRAIN:", train_index, "TEST:", test_index)
-            if isinstance(X_train_valid, pd.DataFrame) or isinstance(X_train_valid, pd.Series):
-                X_train_cv, X_valid_cv = X_train_valid.iloc[train_index], X_train_valid.iloc[valid_index]
-            else:
-                X_train_cv, X_valid_cv = X_train_valid[train_index], X_train_valid[valid_index] 
-                
-            if isinstance(y_train_valid, pd.DataFrame) or isinstance(y_train_valid, pd.Series):
-                y_train_cv, y_valid_cv = y_train_valid.iloc[train_index], y_train_valid.iloc[valid_index]
-            else:
-                y_train_cv, y_valid_cv = y_train_valid[train_index], y_train_valid[valid_index]  
-                
-            if config['gdt']['objective'] == 'classification':
-                 sklearn_model = DecisionTreeClassifier
-            else:
-                 sklearn_model = DecisionTreeRegressor                
-                
-            base_model = sklearn_model()
-            base_model.set_params(**parameter_setting)
-
-            base_model.fit(enforce_numpy(X_train_cv), enforce_numpy(y_train_cv))
-
-            base_model_pred = base_model.predict(enforce_numpy(X_valid_cv))
-            if metric not in ['f1', 'roc_auc']:
-                score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(y_valid_cv), np.round(base_model_pred))
-            else:
-                if metric == 'f1':
-                    score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(y_valid_cv), np.round(base_model_pred), average='macro')
-                elif metric == 'roc_auc':
-                    try:
-                        if int(np.max(y_train_cv)+1) > 2:                            
-                            score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(tf.keras.utils.to_categorical(y_valid_cv, num_classes=len(np.unique(np.concatenate([dataset_dict['y_train'].values, dataset_dict['y_valid'].values, dataset_dict['y_test'].values]))))), np.round(tf.keras.utils.to_categorical(base_model_pred, num_classes=len(np.unique(np.concatenate([dataset_dict['y_train'].values, dataset_dict['y_valid'].values, dataset_dict['y_test'].values]))))), multi_class='ovo')
-                        else:
-                            #score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(tf.keras.utils.to_categorical(y_valid_cv)), np.round(tf.keras.utils.to_categorical(base_model_pred)))    
-                            score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(y_valid_cv), np.round(base_model_pred))       
-                            
-                    except ValueError:
-                        score_base_model_cv = 0.5
-                    
-            score_base_model_cv_list.append(score_base_model_cv)
+        del dataset_dict
+        score_base_model_trial_list = []
+        for i in range(config['computation']['trials']):
+            dataset_dict = get_preprocessed_dataset(identifier,
+                                                    random_seed=config['computation']['random_seed']+i,
+                                                    config=config,
+                                                    verbosity=0)      
             
-        score_base_model = np.mean(score_base_model_cv_list)
+
+            if config['gdt']['objective'] == 'classification':
+                cv_generator = StratifiedKFold(n_splits=config['computation']['cv_num'], shuffle=True, random_state=config['computation']['random_seed']+i)
+            else:
+                cv_generator = KFold(n_splits=config['computation']['cv_num'], shuffle=True, random_state=config['computation']['random_seed']+i)        
+
+            X_train_valid = pd.concat([dataset_dict['X_train'], dataset_dict['X_valid']])
+            y_train_valid = pd.concat([dataset_dict['y_train'], dataset_dict['y_valid']])
+
+            score_base_model_cv_list = []
+            for train_index, valid_index in cv_generator.split(X_train_valid, y_train_valid):
+                #print("TRAIN:", train_index, "TEST:", test_index)
+                if isinstance(X_train_valid, pd.DataFrame) or isinstance(X_train_valid, pd.Series):
+                    X_train_cv, X_valid_cv = X_train_valid.iloc[train_index], X_train_valid.iloc[valid_index]
+                else:
+                    X_train_cv, X_valid_cv = X_train_valid[train_index], X_train_valid[valid_index] 
+
+                if isinstance(y_train_valid, pd.DataFrame) or isinstance(y_train_valid, pd.Series):
+                    y_train_cv, y_valid_cv = y_train_valid.iloc[train_index], y_train_valid.iloc[valid_index]
+                else:
+                    y_train_cv, y_valid_cv = y_train_valid[train_index], y_train_valid[valid_index]  
+
+                if config['gdt']['objective'] == 'classification':
+                     sklearn_model = DecisionTreeClassifier
+                else:
+                     sklearn_model = DecisionTreeRegressor                
+
+                base_model = sklearn_model()
+                base_model.set_params(**parameter_setting)
+
+                base_model.fit(enforce_numpy(X_train_cv), enforce_numpy(y_train_cv))
+
+                base_model_pred = base_model.predict(enforce_numpy(X_valid_cv))
+                if metric not in ['f1', 'roc_auc']:
+                    score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(y_valid_cv), np.round(base_model_pred))
+                else:
+                    if metric == 'f1':
+                        score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(y_valid_cv), np.round(base_model_pred), average='macro')
+                    elif metric == 'roc_auc':
+                        try:
+                            if int(np.max(y_train_cv)+1) > 2:                            
+                                score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(tf.keras.utils.to_categorical(y_valid_cv, num_classes=len(np.unique(np.concatenate([dataset_dict['y_train'].values, dataset_dict['y_valid'].values, dataset_dict['y_test'].values]))))), np.round(tf.keras.utils.to_categorical(base_model_pred, num_classes=len(np.unique(np.concatenate([dataset_dict['y_train'].values, dataset_dict['y_valid'].values, dataset_dict['y_test'].values]))))), multi_class='ovo')
+                            else:
+                                #score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(tf.keras.utils.to_categorical(y_valid_cv)), np.round(tf.keras.utils.to_categorical(base_model_pred)))    
+                                score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(y_valid_cv), np.round(base_model_pred))       
+
+                        except ValueError:
+                            score_base_model_cv = 0.5
+
+                score_base_model_cv_list.append(score_base_model_cv)
+
+            score_base_model = np.mean(score_base_model_cv_list)
+            score_base_model_trial_list.append(score_base_model)
+            
+        score_base_model = np.mean(score_base_model_trial_list)
 
         return (score_base_model, parameter_setting)    
     
@@ -4269,61 +4288,72 @@ def hpo_sklearn(identifier, dataset_dict, parameter_dict, config, metric='f1', g
 def hpo_DNDT(identifier, dataset_dict, parameter_dict, config, metric='f1', greater_better=True):
     
     def evaluate_parameter_setting_DNDT(parameter_setting, dataset_dict, config):   
+
+        del dataset_dict
+        score_base_model_trial_list = []
+        for i in range(config['computation']['trials']):
+            dataset_dict = get_preprocessed_dataset(identifier,
+                                                    random_seed=config['computation']['random_seed']+i,
+                                                    config=config,
+                                                    verbosity=0)              
         
-        if config['gdt']['objective'] == 'classification':
-            cv_generator = StratifiedKFold(n_splits=config['computation']['cv_num'], shuffle=True, random_state=config['computation']['random_seed'])
-        else:
-            cv_generator = KFold(n_splits=config['computation']['cv_num'], shuffle=True, random_state=config['computation']['random_seed'])        
-
-        X_train_valid = pd.concat([dataset_dict['X_train'], dataset_dict['X_valid']])
-        y_train_valid = pd.concat([dataset_dict['y_train'], dataset_dict['y_valid']])
-
-        score_base_model_cv_list = []
-        for train_index, valid_index in cv_generator.split(X_train_valid, y_train_valid):
-            #print("TRAIN:", train_index, "TEST:", test_index)
-            if isinstance(X_train_valid, pd.DataFrame) or isinstance(X_train_valid, pd.Series):
-                X_train_cv, X_valid_cv = X_train_valid.iloc[train_index], X_train_valid.iloc[valid_index]
+            if config['gdt']['objective'] == 'classification':
+                cv_generator = StratifiedKFold(n_splits=config['computation']['cv_num'], shuffle=True, random_state=config['computation']['random_seed'])
             else:
-                X_train_cv, X_valid_cv = X_train_valid[train_index], X_train_valid[valid_index] 
-                
-            if isinstance(y_train_valid, pd.DataFrame) or isinstance(y_train_valid, pd.Series):
-                y_train_cv, y_valid_cv = y_train_valid.iloc[train_index], y_train_valid.iloc[valid_index]
-            else:
-                y_train_cv, y_valid_cv = y_train_valid[train_index], y_train_valid[valid_index]  
-                      
-            X_train_cv_train, X_train_cv_valid, y_train_cv_train, y_train_cv_valid = train_test_split(X_train_cv, y_train_cv, test_size=0.1, random_state=config['computation']['random_seed'])
-                    
-            number_of_classes = len(np.unique(np.concatenate([dataset_dict['y_train'].values, dataset_dict['y_valid'].values, dataset_dict['y_test'].values])))
-                    
-            base_model = DNDT(num_features = X_train_cv_train.shape[1],
-                              num_classes = number_of_classes,
-                              num_cut=None)
-            base_model.set_params(**parameter_setting)
+                cv_generator = KFold(n_splits=config['computation']['cv_num'], shuffle=True, random_state=config['computation']['random_seed'])        
 
-            base_model.fit(enforce_numpy(X_train_cv_train), 
-                           enforce_numpy(y_train_cv_train), 
-                           valid_data=(enforce_numpy(X_train_cv_valid), enforce_numpy(y_train_cv_valid)))
+            X_train_valid = pd.concat([dataset_dict['X_train'], dataset_dict['X_valid']])
+            y_train_valid = pd.concat([dataset_dict['y_train'], dataset_dict['y_valid']])
 
-            base_model_pred = base_model.predict(enforce_numpy(X_valid_cv))
-            if metric not in ['f1', 'roc_auc']:
-                score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(y_valid_cv), np.round(base_model_pred))
-            else:
-                if metric == 'f1':
-                    score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(y_valid_cv), np.round(base_model_pred), average='macro')
-                elif metric == 'roc_auc':
-                    try:
-                        if int(np.max(y_train_cv)+1) > 2:                            
-                            score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(tf.keras.utils.to_categorical(y_valid_cv, num_classes=number_of_classes)), np.round(tf.keras.utils.to_categorical(base_model_pred, num_classes=number_of_classes)), multi_class='ovo')
-                        else:
-                            #score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(tf.keras.utils.to_categorical(y_valid_cv)), np.round(tf.keras.utils.to_categorical(base_model_pred)))    
-                            score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(y_valid_cv), np.round(base_model_pred))       
-                            
-                    except ValueError:
-                        score_base_model_cv = 0.5
-                    
-            score_base_model_cv_list.append(score_base_model_cv)
+            score_base_model_cv_list = []
+            for train_index, valid_index in cv_generator.split(X_train_valid, y_train_valid):
+                #print("TRAIN:", train_index, "TEST:", test_index)
+                if isinstance(X_train_valid, pd.DataFrame) or isinstance(X_train_valid, pd.Series):
+                    X_train_cv, X_valid_cv = X_train_valid.iloc[train_index], X_train_valid.iloc[valid_index]
+                else:
+                    X_train_cv, X_valid_cv = X_train_valid[train_index], X_train_valid[valid_index] 
+
+                if isinstance(y_train_valid, pd.DataFrame) or isinstance(y_train_valid, pd.Series):
+                    y_train_cv, y_valid_cv = y_train_valid.iloc[train_index], y_train_valid.iloc[valid_index]
+                else:
+                    y_train_cv, y_valid_cv = y_train_valid[train_index], y_train_valid[valid_index]  
+
+                X_train_cv_train, X_train_cv_valid, y_train_cv_train, y_train_cv_valid = train_test_split(X_train_cv, y_train_cv, test_size=0.1, random_state=config['computation']['random_seed'])
+
+                number_of_classes = len(np.unique(np.concatenate([dataset_dict['y_train'].values, dataset_dict['y_valid'].values, dataset_dict['y_test'].values])))
+
+                base_model = DNDT(num_features = X_train_cv_train.shape[1],
+                                  num_classes = number_of_classes,
+                                  num_cut=None)
+                base_model.set_params(**parameter_setting)
+
+                base_model.fit(enforce_numpy(X_train_cv_train), 
+                               enforce_numpy(y_train_cv_train), 
+                               valid_data=(enforce_numpy(X_train_cv_valid), enforce_numpy(y_train_cv_valid)))
+
+                base_model_pred = base_model.predict(enforce_numpy(X_valid_cv))
+                if metric not in ['f1', 'roc_auc']:
+                    score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(y_valid_cv), np.round(base_model_pred))
+                else:
+                    if metric == 'f1':
+                        score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(y_valid_cv), np.round(base_model_pred), average='macro')
+                    elif metric == 'roc_auc':
+                        try:
+                            if int(np.max(y_train_cv)+1) > 2:                            
+                                score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(tf.keras.utils.to_categorical(y_valid_cv, num_classes=number_of_classes)), np.round(tf.keras.utils.to_categorical(base_model_pred, num_classes=number_of_classes)), multi_class='ovo')
+                            else:
+                                #score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(tf.keras.utils.to_categorical(y_valid_cv)), np.round(tf.keras.utils.to_categorical(base_model_pred)))    
+                                score_base_model_cv = sklearn.metrics.get_scorer(metric)._score_func(enforce_numpy(y_valid_cv), np.round(base_model_pred))       
+
+                        except ValueError:
+                            score_base_model_cv = 0.5
+
+                score_base_model_cv_list.append(score_base_model_cv)
+
+            score_base_model = np.mean(score_base_model_cv_list)
+            score_base_model_trial_list.append(score_base_model)
             
-        score_base_model = np.mean(score_base_model_cv_list)
+        score_base_model = np.mean(score_base_model_trial_list)
 
         return (score_base_model, parameter_setting)    
     
@@ -4379,7 +4409,6 @@ def hpo_DNDT(identifier, dataset_dict, parameter_dict, config, metric='f1', grea
     file_by_dataset.close()        
     
     return (runtime, base_model)
-
 
 
 def structure_evaluation_results(evaluation_results,
