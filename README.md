@@ -16,9 +16,6 @@ pip install GradTree
 ```
 More details can be found under: https://pypi.org/project/GradTree/
 
-## Usage
-Example usage is in the following or available in ***GradTree_minimal_example.ipynb***. Please note that a GPU is required to achieve competitive runtimes.
-
 ## Cite us
 
 ```
@@ -29,6 +26,9 @@ Example usage is in the following or available in ***GradTree_minimal_example.ip
   year={2023}
 }
 ```
+
+## Usage
+Example usage is in the following or available in ***GradTree_minimal_example.ipynb***. Please note that a GPU is required to achieve competitive runtimes.
 
 ### Load Data
 ```python
