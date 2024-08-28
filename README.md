@@ -1,5 +1,8 @@
 # 🌳 GradTree: Gradient-Based Decision Trees 🌳
 
+> **⚠️ Deprecated Repository Notice:**  
+> **This repository is deprecated! Please go to the new repository here:** [GradTree](https://github.com/s-marton/GradTree).
+
 🌳 GradTree is a novel approach for learning hard, axis-aligned decision trees with gradient descent!
 
 🔍 What's new?
